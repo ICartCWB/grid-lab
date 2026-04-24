@@ -1,0 +1,1 @@
+Planned frontend for the Grid Lab SPA (HTML5, Tailwind CSS, JavaScript ES6).

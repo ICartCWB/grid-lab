@@ -1,164 +1,104 @@
-# Grid Lab — Architecture
+# Grid Lab
 
-This document describes the planned technical architecture of Grid Lab: its modules, data flows, design decisions, and the rationale behind each structural choice.
+**A Modular Workbench for DGGS Design, Interoperability, and Cadastral Analysis**
 
-> **Note:** This is a planning document. The architecture described here reflects current design intentions and may evolve during implementation.
-
-## 1. Architectural Philosophy
-
-Grid Lab is organized around a single primary constraint: **honesty of scope**. Each module is designed to demonstrate only what it actually implements, with a clear separation between operational components and research-stage prototypes.
-
-Three principles govern the architecture:
-
-- **Pedagogical transparency:** the system exposes its own internals — such as JSON traffic, index trees, and metric computations — as primary learning content rather than hidden implementation details.
-- **Runtime portability:** the frontend runs entirely in the browser with no installation; the backend is lightweight and executable locally for congress demonstration without cloud dependency
-- **Modular independence:** each track is self-contained and can be demonstrated independently; Track C (ITACaRT) does not depend on Track B (pydggsapi), and Track A does not depend on either
-
-## 2. System Overview
-
-Grid Lab is composed of two runtime layers: a browser-based frontend intended for static hosting, and a lightweight Python backend intended for local execution during demonstration.
-
-The user interacts with three independent track panels rendered within a shared frontend shell. Tracks A and B issue requests to the backend REST API, which delegates to the appropriate DGGS engine or standards-compliant interoperability layer. Track C operates entirely in the browser, since its logic is deterministic and requires no server-side computation.
-
-External tile layers, such as OpenStreetMap, are consumed directly by the frontend for map rendering.
-
-For live presentation reliability, the frontend may also be served locally when internet access or cross-origin communication is constrained.
+> Submitted to CATCON 9 — XXV ISPRS Congress · Toronto, Canada · July 2026
 
 
-## 3. Frontend
+## Overview
 
-The frontend is a Single Page Application (SPA) with no build step required for deployment. It is structured around three independent panel modules rendered into a shared shell.
+Grid Lab is an interactive e-learning environment designed as a technical decision-support workbench. It enables geospatial developers and researchers to empirically evaluate the trade-offs involved in selecting Discrete Global Grid Systems (DGGS), moving from multi-system benchmarking to live standards inspection to specialized cadastral research within a single coherent environment.
 
-**Key dependencies (CDN):**
+The project addresses a concrete pedagogical gap: practitioners often adopt popular DGGS libraries (H3, S2, rHEALPix) without tools to quantify geometric distortions or test interoperability constraints before implementation. Grid Lab makes those trade-offs explicit and measurable.
 
-| Library | Role |
+**Target audience:** Geospatial data scientists, geoinformation professionals, and spatial data infrastructure developers.
+
+## Current Status
+
+Grid Lab is currently under active development as a CATCON 9 submission project. The present repository documents the conceptual architecture, methodological basis, and planned software modules. Interactive implementation is in progress.
+
+### Learning Tracks
+
+#### Track A — The Comparative Workbench
+
+Multi-system benchmarking across H3, S2, and rHEALPix. Users select mission profiles — Urban Logistics, Global Statistics, or Cadastral Surveying — and generate Benchmark Panels with:
+
+- Side-by-side cell coverage visualization over real urban parcels (Leaflet.js)
+- Quantitative distortion metrics: area variation, compactness ratio, angular deformation across resolutions
+- Comparative charts of indexing patterns and hierarchical refinement behavior (D3.js)
+
+The underlying framework is the **design trilemma**: geodetic fidelity vs. topological consistency vs. hierarchical congruency — a lens for understanding why no general-purpose DGGS is optimal for all applications.
+
+#### Track B — Standards Inspector
+
+A live interoperability module integrated with [`pydggsapi`](https://github.com/opengeospatial/pydggsapi), exposing the OGC API-DGGS standard through an inspectable interface. Features:
+
+- **Live Request Inspector:** real JSON traffic from OGC API-DGGS-conformant queries, applied to H3, rHEALPix, IGEO7, and IVEA7H
+- System-agnostic data discovery demonstration, showing how standardization reduces technical lock-in
+- Comparative query view: the same geographic request resolved across different DGGS implementations
+
+#### Track C — Analytical Backend & Specialized Research (ITACaRT)
+
+This module explores ITACaRT not only as a cadastral-oriented DGGS, but as an analytical backend bridging raster-like discretization and vector-oriented GIS reasoning. Three properties are examined:
+
+| Property | Description |
 |---|---|
-| Tailwind CSS | Utility-first styling |
-| Leaflet.js | Slippy map and GeoJSON layer rendering |
-| D3.js | Benchmark charts and data-driven visualizations |
+| Centimetric resolution | 14 levels spanning 10 km to 1 cm, aligned with high-precision GNSS surveying scenarios |
+| Compositional indexing | Encodes complex vector features across large extents — including multi-UTM-zone contexts — within a single reference |
+| Deterministic refinement | Mixed 1-to-4 / 1-to-25 strategy producing metric-aligned areas (1 cm², 1 m², 1 km²) |
 
-**State management:** minimal and explicit. Each track maintains its own isolated state object. No shared reactive store — this avoids hidden coupling between tracks during demonstration.
+**Linear Resolution Explorer:** Users specify a target linear dimension (cell base or height) and the system identifies the corresponding ITACaRT refinement level, whether it belongs to a complete decimal step or an intermediate subdivision, along with its associated area, analysis and visualization scales, and metric interpretation for cadastral use.
 
-## 4. Backend
+**Hierarchical Index Decoder:** Users paste any compositional index string — e.g., `SE(1400/0374(3(C2(3))))` — and receive a syntax-highlighted, tree-structured decomposition with level-by-level breakdown of quadrant, base cell, and refinement components.
 
-The backend is a lightweight REST service, designed to be started with a single command and to expose a small, stable API surface. It is intentionally not deployed to a cloud service; it runs locally during the congress demonstration.
-
-### 4.1 Track A Endpoints
-
-Track A provides backend services for multi-system benchmarking. These services receive a spatial extent, a DGGS choice, and a target resolution, and return:
-
-* DGGS cell geometries as GeoJSON;
-* comparative benchmarking outputs;
-* distortion metrics such as area variation, compactness, and angular deformation.
-
-Example service groups:
-
-* /api/benchmark/coverage — returns cell coverage and metrics for a selected DGGS;
-* /api/benchmark/compare — returns side-by-side benchmarking outputs across multiple DGGS implementations.
-
-### 4.2 Track B Endpoints (pydggsapi proxy)
-
-Track B provides a thin interoperability layer built around pydggsapi, exposing standards-based DGGS discovery and query workflows. These services return:
-
-* available DGGS definitions from the registry;
-* OGC API-DGGS query results;
-* raw request/response logs for inspection in the frontend.
-
-Example service groups:
-
-* /api/ogc/dggs-list — lists available DGGS resources;
-* /api/ogc/zones — queries DGGS zones for a selected system and spatial extent.
-
-The raw request/response log is the primary pedagogical output of Track B: it is returned alongside the geographic data and rendered by the Live Request Inspector in the frontend.
-
-
-## 5. Track C — ITACaRT Module (Frontend-only)
-
-Track C implements no backend calls. All logic is deterministic, derived directly from the ITACaRT mathematical specification (see [`itacart-logic.md`](itacart-logic.md)).
-
-The module comprises two independent interactive components:
-
-**Linear Resolution Explorer:** The user provides a target linear dimension (cell base or height, in metres). The component determines the corresponding ITACaRT refinement level using the two resolution rules and returns the matched level, step type, cell area, visualization and analysis scales, and a cadastral interpretation note.
-
-**Hierarchical Index Decoder:** The user pastes any valid ITACaRT compositional index string, including sibling groups separated by commas. A recursive parser tokenizes the input, identifies each component (quadrant, base cell coordinates, refinement codes, and sibling branches), and constructs a tree structure. A D3.js renderer displays the hierarchy with level-by-level annotations showing refinement level, cell dimensions, cell area, local offsets, and cumulative sinusoidal position. Compositional sibling notation is treated as a first-class structural element rather than a flat text separator.
-
-Example decomposition for `SE(1400/0374(3(C2(3,4))))`:
+## Repository Structure
 
 ```
-SE(1400/0374(3(C2(3,4))))
-│
-├── Quadrant: SE [X sign = -, Y sign = -]
-├── Base cell: 1400/0374
-│   ├── Resolution 1 — 10 km × 10 km
-│   └── Base sinusoidal position: X = 14000 km, Y = 3740 km
-│
-└── Refinement chain
-    ├── Intermediate refinement: 3
-    │   ├── Resolution 2 — 5 km × 5 km
-    │   └── Local offset: ΔX = -5 km, ΔY = +5 km
-    └── Decimal refinement: C2
-        ├── Resolution 3 — 1 km × 1 km
-        ├── Local offset: ΔX = -1 km, ΔY = +2 km
-        ├── Intermediate refinement: 3 (Leaf 1)
-        │   ├── Resolution 4 — 500 m × 500 m
-        │   └── Local offset: ΔX = -0.5 km, ΔY = +0.5 km
-        │
-        └── Intermediate refinement: 4 (Leaf 2)
-            ├── Resolution 4 — 500 m × 500 m
-            └── Local offset: ΔX = 0 km, ΔY = +0.5 km
-
+grid-lab/
+├── docs/                   # Technical documentation and diagrams
+│   ├── architecture.md     # Module architecture and design decisions
+│   └── itacart-logic.md    # Mathematical foundation of the decimal refinement
+├── src/                    # Source code (in development)
+│   ├── frontend/           # SPA — HTML5 / Tailwind CSS / JavaScript ES6
+│   └── backend/            # Python module — pydggsapi integration
+├── LICENSE
+└── README.md
 ```
 
-Final sinusoidal positions:
-| | Leaf 1 | Leaf 2 |
-|---|---|---|
-| X | -13993.5 km | -13994.0 km |
-| Y | -3747.5 km | -3747.5 km |
+## Planned Stack
 
-Planned extension: Terminal leaf cells derived from the compositional index may also be rendered directly on the map, allowing users to inspect how hierarchical branches translate into spatial footprints in the sinusoidal reference space. A further extension may support sinusoidal-to-geodetic transformation for geographic visualization in latitude/longitude.
+| Layer | Technology |
+|---|---|
+| Frontend | HTML5, Tailwind CSS, JavaScript ES6 |
+| Geospatial visualization | Leaflet.js |
+| Charts and benchmarks | D3.js |
+| Backend | Python 3.10+, Flask / FastAPI |
+| Standards integration | pydggsapi (OGC API-DGGS) |
+| DGGS libraries | h3-py, s2geometry, rhealpixdggs |
+| Hosting | GitHub Pages (frontend) + local execution (backend) |
 
-## 6. Data Flow Summary
+## Theoretical Foundation
 
-| Track | Input | Processing | Output |
-|---|---|---|---|
-| A | Mission profile + bbox | Backend: DGGS engines compute coverage + metrics | GeoJSON layers + D3 benchmark chart |
-| B | Geographic query | Backend: pydggsapi generates OGC request + response | Map result + raw JSON inspector panel |
-| C — Explorer | Target dimension (m) | Frontend: deterministic refinement lookup | Level, area, scales, cadastral note |
-| C — Decoder | Index string | Frontend: recursive parser + cumulative sinusoidal reconstruction | Collapsible D3 tree + projected positions |
+The ITACaRT module is grounded in peer-reviewed research:
+
+> Silva, I.N., Dietzsch, G., & Shiguemori, E.H. (2025). *ITACaRT: An Equal-Area Parallelogram Discrete Global Grid System for Terrestrial Cadastral Mapping — Designed for Usability and Blockchain Integration.* Revista Brasileira de Cartografia, vol. 77. [DOI: 10.14393/rbcv77n0a-79281](https://doi.org/10.14393/rbcv77n0a-79281)
+
+Prior presentation:
+
+> Silva, I.N., Shiguemori, E.H., & Dietzsch, G. (2025). *Designing a parallelogram Discrete Global Grid System for terrestrial cadastral mapping.* Proceedings of the XXV Brazilian Symposium on GeoInformatics (GeoInfo 2025).
 
 
-## 7. Deployment
+## Status
 
-### Development
+This repository is under active development. Documentation, source code, and demonstration materials are being progressively prepared for the ISPRS 2026 congress.
 
-```bash
-# Backend
-cd src/backend
-pip install -r requirements.txt
-uvicorn app:app --reload --port 8000
+| Component | Status |
+|---|---|
+| Project documentation | In progress |
+| Track A — Comparative Workbench | Planned |
+| Track B — Standards Inspector | Conceptually defined / implementation planned |
+| Track C — ITACaRT Module | Planned |
 
-# Frontend
-# Open src/frontend/index.html directly in browser
-# or serve with any static file server:
-npx serve src/frontend
-```
+## License
 
-### Local / Portable Deployment
-
-The frontend is hosted on GitHub Pages from the `main` branch (`src/frontend/` directory). The backend runs locally on the presenter's machine. The frontend uses a configurable base URL for API calls, defaulting to `http://localhost:8000` when no remote backend is detected.
-
-Track C requires no backend and functions fully offline.
-
-## 8. Design Decisions
-
-**Why no build step on the frontend?**
-A bundler (Vite, Webpack) would add setup friction in a portable runtime setting and complicate GitHub Pages deployment. All dependencies load from CDN. This is a deliberate trade-off: slightly larger initial load against zero build configuration.
-
-**Why Flask/FastAPI instead of a serverless function?**
-Serverless platforms may impose timeout, packaging, and binary dependency constraints that are inconvenient for a portable environment using `h3-py`, `s2geometry`, and `rhealpixdggs`. A locally-executed service reduces this risk for portable deployment.
-
-**Why is Track C frontend-only?**
-The ITACaRT resolution logic is deterministic and closed-form. Moving it to the backend would add a round-trip with no computational benefit, and would make the module dependent on the backend being available. Frontend-only execution makes Track C robust in offline or low-connectivity settings.
-
-**Why pydggsapi as the Track B engine?**
-`pydggsapi` is a Python implementation aligned with the OGC API-DGGS draft and suitable for exposing real standard-oriented request/response flows. Using it — rather than a custom OGC wrapper — means the JSON traffic displayed in the Live Request Inspector reflects the actual standard, not a simulation of it.
+[MIT License](LICENSE)
